@@ -1,0 +1,97 @@
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.DumperOptions;
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.yaml:snakeyaml:1.8'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'groovy'
+}
+
+ext{
+    plugin_name = 'WorldRegenerator'
+    plugin_version = '0.0.1'
+    plugin_main = 'io.github.wysohn.worldregenerator.main.WorldRegenerator'
+    plugin_author = 'wysohn'
+    plugin_depend = ['RapidFramework', 'KoTH', 'MultiWorld', 'WorldBorder', 'WorldGuard']
+    plugin_softdepend = ['Vault']
+    plugin_commands = new HashMap<String, Object>(){{
+        put('worldregenerator', new HashMap<String, Object>(){{
+            put('description', 'some description');
+            put('aliases', ['wr', 'wregen']);
+        }});
+    }};
+    plugin_permissions = new HashMap<String, Object>(){{
+        put('worldregenerator.admin', new HashMap<String, Object>(){{
+            put('description', 'some description2');
+        }});
+    }};
+
+    bukkit_version = '1.12.2'
+}
+
+task setupPluginYml {
+    DumperOptions options = new DumperOptions();
+    options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+    options.setPrettyFlow(true);
+
+	File file = new File("$projectDir/src/main/resources/plugin.yml");
+
+	if(!file.getParentFile().exists())
+		file.getParentFile().mkdirs();
+
+    if (!file.exists())
+        file.createNewFile();
+
+    InputStream input = new FileInputStream(file);
+    Yaml yaml = new Yaml(options);
+    Map<String, Object> map = yaml.load(input);
+    input.close();
+
+    if(map == null)
+        map = new HashMap<>();
+
+    map.put('name', project.ext.plugin_name)
+    map.put('version', project.ext.plugin_version)
+    map.put('main', project.ext.plugin_main)
+    map.put('author', project.ext.plugin_author)
+    map.put('depend', project.ext.plugin_depend)
+    map.put('softdepend', project.ext.plugin_softdepend)
+    map.put('commands', project.ext.plugin_commands)
+    map.put('permissions', project.ext.plugin_permissions)
+
+    FileWriter writer = new FileWriter(file);
+    yaml.dump(map, writer)
+    writer.close();
+}
+
+repositories {
+    jcenter()
+    mavenCentral()
+    maven {
+        url "https://hub.spigotmc.org/nexus/content/repositories/snapshots/"
+    }
+    maven {
+        url "http://nexus.hc.to/content/repositories/pub_releases/"
+    }
+    maven {
+        url "https://oss.sonatype.org/content/repositories/snapshots"
+    }
+}
+
+dependencies {
+	compile fileTree(dir: "libs", includes: ['*.jar'])
+    compileOnly project(":RapidFramework")
+
+    compile "org.bukkit:bukkit:$bukkit_version-R0.1-SNAPSHOT"
+
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+

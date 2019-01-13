@@ -1,0 +1,20 @@
+depend:
+- RapidFramework
+- ''
+- ''
+- ''
+author: wysohn
+permissions:
+  worldregenerator.admin:
+    description: some description2
+name: WorldRegenerator
+main: io.github.wysohn.worldregenerator.main.WorldRegenerator
+softdepend:
+- Vault
+version: 0.0.1
+commands:
+  worldregenerator:
+    aliases:
+    - wr
+    - wregen
+    description: some description
