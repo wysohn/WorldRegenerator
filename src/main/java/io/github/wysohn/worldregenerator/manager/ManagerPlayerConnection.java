@@ -50,7 +50,7 @@ public class ManagerPlayerConnection extends PluginManager<WorldRegenerator> imp
 		
 		if(!this.connectionAllowed && kick) {
 			Bukkit.getOnlinePlayers().stream()
-			.filter((player)->!player.hasPermission(base.executor.adminPermission))
+			.filter((player)->!player.hasPermission(base.commandExecutor.adminPermission))
 			.forEach((player)->{
 				String msg = base.lang.parseFirstString(player, WorldRegeneratorLanguage.Manager_PlayerConnection_KickMessage);
 				player.kickPlayer(msg);
@@ -59,7 +59,7 @@ public class ManagerPlayerConnection extends PluginManager<WorldRegenerator> imp
 	}
 
 	public boolean isConnectionAllowed(Player player) {
-		if(player.hasPermission(base.executor.adminPermission))
+		if(player.hasPermission(base.commandExecutor.adminPermission))
 			return true;
 		
 		return connectionAllowed;

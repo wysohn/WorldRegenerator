@@ -18,10 +18,6 @@ import io.github.wysohn.rapidframework.utils.locations.LocationUtil;
 import io.github.wysohn.worldregenerator.main.WorldRegenerator;
 
 public class ManagerRegionCopy extends PluginManager<WorldRegenerator> {
-	private final ExecutorService pool = Executors.newSingleThreadExecutor();
-	
-	private boolean running = false;
-	
 	public ManagerRegionCopy(WorldRegenerator base, int loadPriority) {
 		super(base, loadPriority);
 	}
@@ -41,46 +37,44 @@ public class ManagerRegionCopy extends PluginManager<WorldRegenerator> {
 		
 	}
 
+	/**
+	 * This method is blocking. Make sure that it's not scheduled on server thread.
+	 * @param areas
+	 * @param to
+	 * @param handle
+	 * @return
+	 */
 	public boolean copyRegions(List<Area> areas, World to, ProgressHandler handle) {
-		if(running)
-			return false;
-		running = true;
-		
 		int size = 0;
 		for(Area area : areas)
 			size += area.size();
 		
-		int totalSize = size;
-		pool.execute(()->{
-			int blockProgressed = 0;
-			int currentArea = 0;
-			
-			try {
-				out:for(Area area : areas) {
-					for(SimpleLocation sloc : area) {
-						Location loc = LocationUtil.convertToBukkitLocation(sloc);
-						Future<Void> future = Bukkit.getScheduler().callSyncMethod(base, ()->{
-							Block origin = loc.getBlock();
-							Block target = to.getBlockAt(sloc.getX(), sloc.getY(), sloc.getZ());
-							target.setType(origin.getType());
-							return null;
-						});
-						future.get();
-						blockProgressed++;
-						
-						if(handle.onProgress(currentArea, areas.size(), blockProgressed, totalSize)) {
-							break out;
-						}
-					}
+		int blockProgressed = 0;
+		int currentArea = 0;
+		
+		try {
+			out:for(Area area : areas) {
+				for(SimpleLocation sloc : area) {
+					Location loc = LocationUtil.convertToBukkitLocation(sloc);
+					Future<Void> future = Bukkit.getScheduler().callSyncMethod(base, ()->{
+						Block origin = loc.getBlock();
+						Block target = to.getBlockAt(sloc.getX(), sloc.getY(), sloc.getZ());
+						target.setType(origin.getType());
+						return null;
+					});
+					future.get();
+					blockProgressed++;
 					
-					currentArea++;
+					if(!handle.onProgress(currentArea, areas.size(), blockProgressed, size)) {
+						break out;
+					}
 				}
-			} catch (InterruptedException | ExecutionException e) {
-				e.printStackTrace();
-			} finally {
-				running = false;
+				
+				currentArea++;
 			}
-		});
+		} catch (InterruptedException | ExecutionException e) {
+			e.printStackTrace();
+		} 
 		return true;
 	}
 	
@@ -92,7 +86,7 @@ public class ManagerRegionCopy extends PluginManager<WorldRegenerator> {
 		 * @param areaTotal
 		 * @param blockProgress
 		 * @param blockTotal This number equals the blockProgress indicates that the task is complete
-		 * @return return true to stop the task in between the progression. false otherwise.
+		 * @return return false to stop the task in between the progression. true otherwise.
 		 */
 		boolean onProgress(int currentArea, int areaTotal, int blockProgress, int blockTotal);
 	}

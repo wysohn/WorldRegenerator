@@ -41,12 +41,11 @@ public class MultiworldAPI extends APISupport {
 	/**
 	 * Create a new world based on given seed and copy world settings of oldWorld.
 	 * @param worldName
-	 * @param oldWorldName
+	 * @param oldWorld
 	 * @param seed
-	 * @param onFinish task to do after creation is done
 	 * @return true if created; false if worldName is already in use
 	 */
-	public boolean createNewWorld(String worldName, World oldWorld, long seed, Runnable onFinish) {
+	public boolean createNewWorld(String worldName, World oldWorld, long seed) {
 		if(Bukkit.getWorld(worldName) != null)
 			return false;
 
@@ -56,8 +55,7 @@ public class MultiworldAPI extends APISupport {
 		Stream.of(FlagName.values()).forEach((flag)->{
 			copyFlags(oldData, worldData, flag);
 		});
-		
-		onFinish.run();
+
 		return true;
 	}
 
@@ -74,7 +72,7 @@ public class MultiworldAPI extends APISupport {
 	 * @param worldName
 	 * @return true if deleted, false otherwise
 	 */
-	public boolean deleteWorld(World world, Runnable onFinish) {
+	public boolean deleteWorld(World world) {
 		Bukkit.getOnlinePlayers().forEach((player)->{
 			base.lang.addString(world.getName());
 			String msg = base.lang.parseFirstString(player, WorldRegeneratorLanguage.API_Multiworld_KickedAsInDeletingWorld);
@@ -90,7 +88,6 @@ public class MultiworldAPI extends APISupport {
 		}
 		
 		mw.getDataManager().getWorldManager().deleteWorld(world.getName());
-		onFinish.run();
 		return true;
 	}
 	
@@ -100,7 +97,7 @@ public class MultiworldAPI extends APISupport {
 	 * @param worldNameNew
 	 * @param onFinish
 	 */
-	public boolean renameWorld(World world, String worldNameNew, Runnable onFinish) {
+	public boolean renameWorld(World world, String worldNameNew) {
 		MultiWorldWorldData worldData = mw.getApi().getWorld(world.getName());
 		try {
 			worldData.unloadWorld();
@@ -133,7 +130,6 @@ public class MultiworldAPI extends APISupport {
 			e.printStackTrace();
 		}
 		
-		onFinish.run();
 		return true;
 	}
 }

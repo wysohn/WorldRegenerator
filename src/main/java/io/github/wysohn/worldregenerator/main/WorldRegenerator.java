@@ -14,6 +14,7 @@ import io.github.wysohn.rapidframework.pluginbase.PluginLanguage.Language;
 import io.github.wysohn.rapidframework.pluginbase.PluginManager;
 import io.github.wysohn.rapidframework.pluginbase.commands.SubCommand;
 import io.github.wysohn.rapidframework.pluginbase.language.DefaultLanguages;
+import io.github.wysohn.worldregenerator.api.KothAPI;
 import io.github.wysohn.worldregenerator.api.MultiworldAPI;
 import io.github.wysohn.worldregenerator.api.WorldBorderAPI;
 import io.github.wysohn.worldregenerator.api.WorldGuardAPI;
@@ -60,6 +61,7 @@ public class WorldRegenerator extends PluginBase {
 		map.put("MultiWorld", MultiworldAPI.class);
 		map.put("WorldBorder", WorldBorderAPI.class);
 		map.put("WorldGuard", WorldGuardAPI.class);
+		map.put("KoTH", KothAPI.class);
 		return map.entrySet().stream();
 	}
 
