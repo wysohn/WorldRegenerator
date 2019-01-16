@@ -15,6 +15,8 @@ import org.bukkit.Location;
 import org.bukkit.World;
 
 import io.github.wysohn.rapidframework.pluginbase.PluginManager;
+import io.github.wysohn.rapidframework.pluginbase.manager.tasks.ManagerSequentialTask;
+import io.github.wysohn.rapidframework.pluginbase.manager.tasks.ManagerSequentialTask.Tasks;
 import io.github.wysohn.worldregenerator.main.WorldRegenerator;
 import io.github.wysohn.worldregenerator.main.WorldRegeneratorConfig;
 import net.minecraft.util.org.apache.commons.lang3.RandomStringUtils;
@@ -36,13 +38,14 @@ public class ManagerRegenProcess extends PluginManager<WorldRegenerator> {
 	private WorldGuardAPI worldGuardAPI;
 	private KothAPI kothAPI;
 	
+	private ManagerSequentialTask managerSequentialTask;
 	private ManagerPlayerConnection managerPlayerConnection;
 	private ManagerRegionCopy managerRegionCopy;
 	
 	private String tempWorldName;
 	private Location lastSpawnLocation;
 	
-	private boolean running = false;
+	private Future<Void> runningTask = null;
 	
 	public ManagerRegenProcess(WorldRegenerator base, int loadPriority) {
 		super(base, loadPriority);
@@ -57,59 +60,9 @@ public class ManagerRegenProcess extends PluginManager<WorldRegenerator> {
 		this.worldGuardAPI = base.APISupport.getAPI("WorldGuard");
 		this.kothAPI = base.APISupport.getAPI("KoTH");
 		
+		this.managerSequentialTask = base.getManager(ManagerSequentialTask.class);
 		this.managerPlayerConnection = base.getManager(ManagerPlayerConnection.class);
 		this.managerRegionCopy = base.getManager(ManagerRegionCopy.class);
-		
-		tempWorldName = config.Settings_TargetWorld+"_temp";
-		
-		tasks.put(State.DISALLOWCONNECTION, ()->{
-			managerPlayerConnection.setConnectionAllowed(false, true);
-		});
-		tasks.put(State.CREATEWORLD, ()->{
-			World world = validateAndGetTargetWorld(config.Settings_TargetWorld);
-			lastSpawnLocation = world.getSpawnLocation();
-			
-			multiworldAPI.createNewWorld(tempWorldName, world, new Random().nextLong());
-		});
-		tasks.put(State.WORLDPREGEN, ()->{
-			World world = validateAndGetTargetWorld(tempWorldName);
-			
-			worldBorderAPI.preGenerate(world, (percent) -> {
-				base.getLogger().info(State.WORLDPREGEN.name()+" progress: "+percent+"%");
-			});
-		});
-		tasks.put(State.REGIONCOPY, () -> {
-			World to = validateAndGetTargetWorld(tempWorldName);
-
-			managerRegionCopy.copyRegions(
-					worldGuardAPI.getRegions(worldName -> worldName.equals(config.Settings_TargetWorld),
-							areaName -> config.Settings_WorldGuardAPI_TargetRegions.contains(areaName)),
-					to,
-					(area, areaTotal, block, blockTotal) -> {
-						base.getLogger().info(State.REGIONCOPY.name() + " Areas: " + area + "/" + areaTotal + " "
-								+ "Blocks: " + block + "/" + blockTotal);
-						return true;
-					});
-		});
-		tasks.put(State.WORLDRENAME, ()->{
-			World world = validateAndGetTargetWorld(config.Settings_TargetWorld);
-			World newWorld = validateAndGetTargetWorld(tempWorldName);
-			
-			multiworldAPI.renameWorld(world, config.Settings_TargetWorld+"_bak");
-			multiworldAPI.renameWorld(newWorld, config.Settings_TargetWorld);
-		});
-		tasks.put(State.RESETSPAWN, ()->{
-			World world = validateAndGetTargetWorld(config.Settings_TargetWorld);
-			world.setSpawnLocation(getSafeSpawnLocation(world,
-					lastSpawnLocation.getBlockX(),
-					lastSpawnLocation.getBlockZ()));
-		});
-		tasks.put(State.ALLOWCONNECTION, ()->{
-			managerPlayerConnection.setConnectionAllowed(true);
-			
-			tempWorldName = null;
-			lastSpawnLocation = null;
-		});
 	}
 
 	private World validateAndGetTargetWorld(String targetWorldName) {
@@ -142,7 +95,7 @@ public class ManagerRegenProcess extends PluginManager<WorldRegenerator> {
 
 	// Start process
 	public boolean start() {
-		if(running)
+		if(runningTask != null && !runningTask.isDone())
 			return false;
 		
 		validate(this.config);
@@ -153,31 +106,61 @@ public class ManagerRegenProcess extends PluginManager<WorldRegenerator> {
 		validate(this.worldGuardAPI);
 		validate(this.kothAPI);
 		
+		validate(this.managerSequentialTask);
 		validate(this.managerPlayerConnection);
 		validate(this.managerRegionCopy);
 		
-		new Thread(() -> {
-			running = true;
-			
-			int ordinal = state.ordinal();
-			State[] states = State.values();
-			try {
-				for(int i = ordinal + 1; ordinal < states.length - 1; i++) {
-					base.getLogger().info(states[i].name()+" has started.");
-					Future<?> future = pool.submit(tasks.get(states[i]));
-					future.get();
-					base.getLogger().info(states[i].name()+" is done.");
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-			} finally {
-				running = false;
-				
-				tasks.get(State.ALLOWCONNECTION).run();
-				state = State.NONE;
-			}
-		}).start();
+		tempWorldName = config.Settings_TargetWorld+"_temp";
 		
+		runningTask = this.managerSequentialTask.schedule(Tasks.Builder
+				.startWith(base, "Disallow Connections", ()->{
+					managerPlayerConnection.setConnectionAllowed(false, true);
+				})
+				.then("Create World", ()->{
+					World world = validateAndGetTargetWorld(config.Settings_TargetWorld);
+					lastSpawnLocation = world.getSpawnLocation();
+					
+					multiworldAPI.createNewWorld(tempWorldName, world, new Random().nextLong());
+				})
+				.then("World Pregen", ()->{
+					World world = validateAndGetTargetWorld(tempWorldName);
+					
+					worldBorderAPI.preGenerate(world, (percent) -> {
+						base.getLogger().info(State.WORLDPREGEN.name()+" progress: "+percent+"%");
+					});
+				})
+				.then("Copying Regions", () -> {
+					World to = validateAndGetTargetWorld(tempWorldName);
+
+					managerRegionCopy.copyRegions(
+							worldGuardAPI.getRegions(worldName -> worldName.equals(config.Settings_TargetWorld),
+									areaName -> config.Settings_WorldGuardAPI_TargetRegions.contains(areaName)),
+							to,
+							(area, areaTotal, block, blockTotal) -> {
+								base.getLogger().info(State.REGIONCOPY.name() + " Areas: " + area + "/" + areaTotal + " "
+										+ "Blocks: " + block + "/" + blockTotal);
+								return true;
+							});
+				})
+				.then("Rename worlds", () -> {
+					World world = validateAndGetTargetWorld(config.Settings_TargetWorld);
+					World newWorld = validateAndGetTargetWorld(tempWorldName);
+
+					multiworldAPI.renameWorld(world, config.Settings_TargetWorld + "_bak");
+					multiworldAPI.renameWorld(newWorld, config.Settings_TargetWorld);
+				})
+				.then("Set initial spawn", () -> {
+					World world = validateAndGetTargetWorld(config.Settings_TargetWorld);
+					world.setSpawnLocation(
+							getSafeSpawnLocation(world, lastSpawnLocation.getBlockX(), lastSpawnLocation.getBlockZ()));
+				})
+				.then("Allow connections", ()->{
+					managerPlayerConnection.setConnectionAllowed(true);
+					
+					tempWorldName = null;
+					lastSpawnLocation = null;
+				})
+				.build());
 		return true;
 	}
 

@@ -1,8 +1,9 @@
 depend:
 - RapidFramework
-- ''
-- ''
-- ''
+- KoTH
+- MultiWorld
+- WorldBorder
+- WorldGuard
 author: wysohn
 permissions:
   worldregenerator.admin:
